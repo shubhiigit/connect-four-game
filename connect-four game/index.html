@@ -1,0 +1,242 @@
+<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ultimate Connect Four</title>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.4.0/dist/confetti.browser.min.js"></script>
+  <audio id="drop-sound" src="https://cdn.pixabay.com/audio/2022/03/15/audio_c0ff3c0e51.mp3"></audio>
+  <audio id="win-sound" src="https://cdn.pixabay.com/audio/2022/03/15/audio_645df7e3f0.mp3"></audio>
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: 'Poppins', sans-serif;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(-45deg, #0f0c29, #302b63, #24243e, #1b1b2f);
+      background-size: 400% 400%;
+      animation: gradientBG 12s ease infinite;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    @keyframes gradientBG {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    h1 {
+      font-size: 3.5rem;
+      margin-bottom: 10px;
+      text-shadow: 0 0 10px #ffffff55;
+    }
+    .name-inputs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    input {
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: none;
+      font-size: 1rem;
+    }
+    .board {
+      display: grid;
+      grid-template-columns: repeat(7, 80px);
+      grid-gap: 10px;
+      padding: 15px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 0 25px rgba(0, 0, 0, 0.5);
+    }
+    .cell {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: #111;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.5rem;
+      cursor: pointer;
+      transition: all 0.2s ease-in-out;
+      box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.2);
+    }
+    .cell:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
+    }
+    .winner {
+      animation: glow 1s infinite alternate;
+    }
+    @keyframes glow {
+      from { box-shadow: 0 0 10px 2px gold; }
+      to { box-shadow: 0 0 20px 6px orange; }
+    }
+    .info {
+      margin-top: 25px;
+      font-size: 1.8rem;
+      font-weight: bold;
+      text-shadow: 0 0 8px rgba(255,255,255,0.4);
+    }
+    .btn {
+      margin-top: 20px;
+      padding: 12px 24px;
+      background: #ffcc00;
+      color: #000;
+      font-weight: bold;
+      font-size: 1rem;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      box-shadow: 0 5px 15px rgba(255, 204, 0, 0.4);
+      transition: background 0.3s ease;
+    }
+    .btn:hover {
+      background: #ff9900;
+    }
+  </style>
+</head>
+<body>
+  <h1>✨ Ultimate Connect Four ✨</h1>
+  <div class="name-inputs">
+    <input id="playerRed" placeholder="Player 🔴 Name" />
+    <input id="playerYellow" placeholder="Player 🟡 Name" />
+    <button class="btn" onclick="startGame()">Start Game</button>
+  </div>
+  <div class="board" id="board" style="display:none;"></div>
+  <div class="info" id="info"></div>
+  <button class="btn" onclick="resetGame()" style="display:none;">🔄 Restart Game</button>  <script>
+    const ROWS = 6;
+    const COLS = 7;
+    const RED = '🔴';
+    const YELLOW = '🟡';
+    let board = [];
+    let currentPlayer = RED;
+    let gameOver = false;
+    let winningCells = [];
+    let playerNames = { '🔴': 'Player 1', '🟡': 'Player 2' };
+
+    function startGame() {
+      const redInput = document.getElementById("playerRed").value.trim();
+      const yellowInput = document.getElementById("playerYellow").value.trim();
+      if (redInput) playerNames['🔴'] = redInput;
+      if (yellowInput) playerNames['🟡'] = yellowInput;
+      document.querySelector('.name-inputs').style.display = 'none';
+      document.getElementById("board").style.display = 'grid';
+      document.querySelector(".btn[onclick='resetGame()']").style.display = 'inline-block';
+      createBoard();
+    }
+
+    function createBoard() {
+      const boardElement = document.getElementById("board");
+      board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+      winningCells = [];
+      boardElement.innerHTML = "";
+
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          const cell = document.createElement("div");
+          cell.classList.add("cell");
+          cell.dataset.row = r;
+          cell.dataset.col = c;
+          cell.addEventListener("click", () => dropPiece(c));
+          boardElement.appendChild(cell);
+        }
+      }
+      updateInfo();
+    }
+
+    function dropPiece(col) {
+      if (gameOver) return;
+      for (let r = ROWS - 1; r >= 0; r--) {
+        if (!board[r][col]) {
+          board[r][col] = currentPlayer;
+          document.getElementById("drop-sound").play();
+          updateBoard();
+          if (checkWinner(r, col)) {
+            document.getElementById("info").textContent = `${playerNames[currentPlayer]} (${currentPlayer}) wins! 🎉`;
+            highlightWinningCells();
+            confetti();
+            document.getElementById("win-sound").play();
+            gameOver = true;
+          } else {
+            currentPlayer = currentPlayer === RED ? YELLOW : RED;
+            updateInfo();
+          }
+          break;
+        }
+      }
+    }
+
+    function updateBoard() {
+      document.querySelectorAll(".cell").forEach((cell) => {
+        const r = cell.dataset.row;
+        const c = cell.dataset.col;
+        cell.textContent = board[r][c] || "";
+        cell.classList.remove("winner");
+      });
+    }
+
+    function updateInfo() {
+      document.getElementById("info").textContent = `Turn: ${playerNames[currentPlayer]} (${currentPlayer})`;
+    }
+
+    function resetGame() {
+      gameOver = false;
+      currentPlayer = RED;
+      createBoard();
+    }
+
+    function highlightWinningCells() {
+      winningCells.forEach(([r, c]) => {
+        document.querySelector(`.cell[data-row='${r}'][data-col='${c}']`).classList.add("winner");
+      });
+    }
+
+    function checkWinner(row, col) {
+      const directions = [
+        [0, 1], [1, 0], [1, 1], [1, -1]
+      ];
+      const symbol = board[row][col];
+      for (let [dx, dy] of directions) {
+        let count = 1;
+        let cells = [[row, col]];
+        for (let dir of [-1, 1]) {
+          let r = row + dx * dir;
+          let c = col + dy * dir;
+          while (
+            r >= 0 && r < ROWS &&
+            c >= 0 && c < COLS &&
+            board[r][c] === symbol
+          ) {
+            count++;
+            cells.push([r, c]);
+            r += dx * dir;
+            c += dy * dir;
+          }
+        }
+        if (count >= 4) {
+          winningCells = cells;
+          return true;
+        }
+      }
+      return false;
+    }
+  </script></body>
+</html>
+     
+     
+     
+   
+
+   
+     
+          
